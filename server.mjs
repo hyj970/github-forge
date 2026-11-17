@@ -263,20 +263,22 @@ function handleFetchV2(store, repo, args) {
   }
   const lookup = store.lookup(repo);
   const cacheKey = JSON.stringify([wants.slice().sort(), haves.slice().sort(), shallow.slice().sort(), depth ?? null]);
-  let pack = repo.packCache.get(cacheKey);
-  let result;
-  if (!pack) {
-    result = computeFetch(wants, haves, shallow, depth, lookup);
+  let cached = repo.packCache.get(cacheKey);
+  if (!cached) {
+    const result = computeFetch(wants, haves, shallow, depth, lookup);
     const objects = result.sendObjects
       .map((oid) => repo.objects.get(oid))
       .filter((o) => o)
       .map((o) => ({ type: o.type, data: o.data }));
-    pack = writePack(objects);
-    repo.packCache.set(cacheKey, pack);
-  } else {
-    // Cache hit: recompute only the shallow-info/ack lines (cheap, no pack rebuild).
-    result = computeFetch(wants, haves, shallow, depth, lookup);
+    cached = {
+      pack: writePack(objects),
+      newShallow: result.newShallow,
+      unshallow: result.unshallow,
+      acks: result.acks,
+    };
+    repo.packCache.set(cacheKey, cached);
   }
+  const result = cached;
 
   const parts = [];
   // acknowledgments
@@ -296,7 +298,7 @@ function handleFetchV2(store, repo, args) {
     parts.push(encodePktLines(lines), DELIM);
   }
   // packfile (always present, at least one sideband packet)
-  parts.push(encodePktLine('packfile\n'), encodeSideband(1, pack), DELIM, FLUSH);
+  parts.push(encodePktLine('packfile\n'), encodeSideband(1, result.pack), DELIM, FLUSH);
   return Buffer.concat(parts);
 }
 

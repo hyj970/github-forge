@@ -268,7 +268,7 @@ export class Store {
       labels: new Map(),
       nextNumber: 1,
       issueCache: new Map(), // number -> serialized issue JSON (read-bench fast path)
-      packCache: new Map(), // fetch key -> pack Buffer
+      packCache: new Map(), // fetch key -> {pack, newShallow, unshallow, acks}
       seq: 0, // creation sequence for issues/PRs ordering
     };
     this.repos.set(`${owner}/${name}`, repo);
