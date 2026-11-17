@@ -269,11 +269,13 @@ class Executor {
   }
 
   execute(definition, variables) {
-    const root = definition.operation === 'mutation' ? this.mutationRoot() : this.queryRoot();
+    const isMutation = definition.operation === 'mutation';
+    const root = isMutation ? this.mutationRoot() : this.queryRoot();
+    const rootType = isMutation ? 'Mutation' : 'Query';
     const data = {};
     for (const selection of definition.selectionSet) {
       if (selection.kind === 'field') {
-        data[selection.alias] = this.executeField(root, 'Query', selection, variables);
+        data[selection.alias] = this.executeField(root, rootType, selection, variables);
       }
     }
     return data;
@@ -499,7 +501,13 @@ class Executor {
         const first = typeof args.first === 'number' ? args.first : files.length;
         return {
           __typename: 'PullRequestChangedFileConnection',
-          __nodes: files.slice(0, first).map((f) => ({ __typename: 'PullRequestChangedFile', path: f.filename })),
+          __nodes: files.slice(0, first).map((f) => ({
+            __typename: 'PullRequestChangedFile',
+            path: f.filename,
+            additions: f.additions,
+            deletions: f.deletions,
+            changeType: f.status === 'added' ? 'ADDED' : f.status === 'removed' ? 'REMOVED' : 'MODIFIED',
+          })),
         };
       }
       case 'author': return { __typename: 'User', login: store.viewer.login };
@@ -674,6 +682,13 @@ Executor.prototype.resolve = function (parent, parentType, field, args) {
   }
   if (parentType === 'Ref') {
     if (field === 'name') return parent.name ?? null;
+    return Executor.UNKNOWN;
+  }
+  if (parentType === 'PullRequestChangedFile') {
+    if (field === 'path') return parent.path ?? null;
+    if (field === 'additions') return parent.additions ?? 0;
+    if (field === 'deletions') return parent.deletions ?? 0;
+    if (field === 'changeType') return parent.changeType ?? 'MODIFIED';
     return Executor.UNKNOWN;
   }
   // Plain objects (introspection field entries, enum values) expose their
